@@ -1,4 +1,3 @@
-
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -8,8 +7,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default defineConfig({
-  // ESSENTIAL FOR TERMUX: Uses relative paths for assets so app works in any folder depth
-  base: './', 
+  // Set base for GitHub Pages (project page) so asset URLs resolve correctly
+  base: '/PractiCoreV5.1/',
   plugins: [react()],
   resolve: {
     alias: {
