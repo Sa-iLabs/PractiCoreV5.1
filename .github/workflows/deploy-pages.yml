@@ -14,6 +14,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      artifact-path: ${{ steps.upload-pages-artifact.outputs.artifact-path }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -40,6 +42,7 @@ jobs:
         run: echo "${{ secrets.PAGES_CUSTOM_DOMAIN }}" > dist/CNAME
 
       - name: Upload artifact for GitHub Pages
+        id: upload-pages-artifact
         uses: actions/upload-pages-artifact@v1
         with:
           path: ./dist
@@ -50,3 +53,43 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v1
+
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Pages to be available and verify
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          echo "Fetching Pages info for $REPO"
+          API_URL="https://api.github.com/repos/$REPO/pages"
+          pages_json=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3+json" "$API_URL")
+          url=$(echo "$pages_json" | python -c "import sys,json; data=json.load(sys.stdin); print(data.get('html_url',''))")
+          if [ -z "$url" ]; then
+            echo "Failed to get Pages URL from API response:" >&2
+            echo "$pages_json" >&2
+            exit 1
+          fi
+          echo "Pages URL: $url"
+
+          # Poll the published site until we get HTTP 200 or timeout
+          attempts=30
+          interval=5
+          i=0
+          until [ $i -ge $attempts ]
+          do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$url") || status=000
+            echo "Attempt $((i+1)) - HTTP status: $status"
+            if [ "$status" = "200" ]; then
+              echo "Pages site is live: $url"
+              exit 0
+            fi
+            i=$((i+1))
+            sleep $interval
+          done
+
+          echo "Pages site did not return HTTP 200 after $attempts attempts" >&2
+          exit 1
